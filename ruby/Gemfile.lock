@@ -1,0 +1,14 @@
+GEM
+  remote: http://rubygems.org/
+  specs:
+    bgp4r (0.0.15)
+    daemons (1.1.8)
+    log4r (1.1.10)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  bgp4r
+  daemons
+  log4r

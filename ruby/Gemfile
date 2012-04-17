@@ -1,0 +1,5 @@
+source 'http://rubygems.org'
+
+gem 'bgp4r'
+gem 'daemons'
+gem 'log4r'
