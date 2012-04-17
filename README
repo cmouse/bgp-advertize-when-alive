@@ -1,0 +1,64 @@
+A simple service oriented BGP advertisement script.
+
+The point of this script is to advertise the wanted prefixed
+when your services are actually running. This is done by 
+having the program check for the service with defined command
+and if it returns non-zero return value, remove advertisement.
+
+I recommend the ruby version. Perl version is provided for those
+cases where ruby is not possible. 
+
+Installation
+
+Prerequisites: 
+ - rubygems
+ - bundler
+
+Execute 'bundler install' on the directory. It should install the
+required components.
+
+Edit the script bgp-peer.rb, and change the paths. 
+
+Edit bgp-daemon.conf (YAML file) to suit your installation. In case
+you lose the original, the default is given at the end. 
+
+Configure peering with router(s). NB: TCP authentication is *not* 
+supported. 
+
+Start the daemon with bgp-peer.rb start. You can then check bgp.log 
+for any activity and errors. 
+
+Default config file
+
+---
+# PEER config (repeat for each peer, use YAML syntax
+  # as number
+- :as: 65000
+  # AFI (choose :ipv4 or :ipv6)
+  :afi: :ipv4
+  # Enable/Disable peer
+  :enabled: 1
+  # Your IP
+  :local_ip: 10.0.0.1
+  # Peer IP
+  :remote_ip: 10.0.0.2
+
+  :targets:
+  # list of prefixes
+  - :prefixes:
+    # one per row, note the -
+    - 10.10.10.10/32
+    # Multi-Exit Discriminator
+    :med: 100
+    # Local preference
+    :pref: 100
+    # this is list of communities you want to send (as string)
+    :communities:
+    # Name for your target set (like, DNS server)
+    :name: DNS server
+    # Next hop IP address
+    :destination: 10.0.0.1
+    # Checker function
+    :check: /bin/true
+
+
