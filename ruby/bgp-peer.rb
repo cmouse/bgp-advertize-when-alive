@@ -1,4 +1,23 @@
 #!/usr/bin/ruby
+# chkconfig for RedHat Linux...
+#
+# chkconfig: 345 99 00
+# description: Controls the bgp advertising daemon
+# processname: bgp-peer
+
+# chkconfig/insserv for SUSE Linux...
+### BEGIN INIT INFO
+# Provides: bgp-peer
+# Required-Start: $all
+# Should-Start:
+# X-UnitedLinux-Should-Start:
+# Required-Stop:
+# Default-Start: 3 5
+# Default-Stop:
+# Short-Description: bgp-peer
+# Description: Controls the bgp advertising daemon
+### END INIT INFO
+
 
 require 'rubygems'
 require 'bgp4r'
@@ -9,10 +28,10 @@ require 'daemons'
 include BGP
 
 # Set this where your config file is
-configFile = "/etc/bgp-daemon.conf"
+configFile = "/opt/bgp/cmouse-bgp-advertize-when-alive-59ffe48/ruby/bgp-daemon.conf"
 logFile = "/var/log/bgp-daemon.log"
 
-# WARN is good. Use DEBUG when you got problems 
+# WARN is good. Use DEBUG when you got problems
 logLevel = Logger::WARN
 
 # end of config
@@ -41,7 +60,7 @@ class Peer
     end
   end
 
-  def connected? 
+  def connected?
     return @neighbor.state == "Established"
   end
 
@@ -64,18 +83,30 @@ class Peer
           Log.warn "#{target[:name]} is now OK - advertising route(s)"
           nlris = []
           target[:prefixes].each do |prefix| nlris << { :prefix => prefix } end
-
-          update = Update.new(
-            Path_attribute.new(
-              Origin.new(:igp),
-              Multi_exit_disc.new(target[:med].to_i),
-              Local_pref.new(target[:pref].to_i),
-              As_path.new(@as),
-              # this is always ignored... 
-              Next_hop.new('127.0.0.1'),
-              Communities.new(target[:communities]),
-              Mp_reach.new(:safi => 1, :nlris => nlris, :nexthop => target[:destination])
-            ))
+          if afi == :ipv4
+            update = Update.new(
+              Path_attribute.new(
+                Origin.new(:igp),
+                Multi_exit_disc.new(target[:med].to_i),
+                Local_pref.new(target[:pref].to_i),
+                As_path.new(@as),
+                Next_hop.new(target[:destination]),
+                Communities.new(target[:communities]),
+                Mp_reach.new(:safi => 1, :nlris => nlris, :nexthop => target[:destination])
+              ))
+          else
+            update = Update.new(
+              Path_attribute.new(
+                Origin.new(:igp),
+                Multi_exit_disc.new(target[:med].to_i),
+                Local_pref.new(target[:pref].to_i),
+                As_path.new(@as),
+                # this is always ignored...
+                Next_hop.new('127.0.0.1'),
+                Communities.new(target[:communities]),
+                Mp_reach.new(:safi => 1, :nlris => nlris, :nexthop => target[:destination])
+              ))
+          end
           @neighbor.send_message update
           target[:state] = 1
         end
@@ -87,7 +118,7 @@ class Peer
 
           update = Update.new(
              Path_attribute.new(
- 		Mp_unreach.new(:safi => 1, :nlris => nlris)
+                Mp_unreach.new(:safi => 1, :nlris => nlris)
              )
           )
           @neighbor.send_message update
@@ -100,24 +131,27 @@ end
 
 peers = []
 
-Daemons.run_proc(File.basename($0)) do
+Daemons.run_proc(File.basename('bgp-peer'), { :dir_mode => :system }) do
   config = YAML.load_file(configFile)
   Log.create(logFile)
   Log.level=logLevel
- 
+
+  Log.warn "bgp-peer v0.1 (c) 2012 Aki Tuomi starting up"
+
   # OK! Time to work for living
-  config.each do |neigh| 
-    next unless neigh[:enabled] == 1 
+  config.each do |neigh|
+    next unless neigh[:enabled] == 1
     peer = Peer.new neigh
     peer.targets = neigh[:targets]
     peer.neighbor.start :auto_retry => true, :no_blocking => true
     peers << peer
   end
 
-  loop do 
+  loop do
     peers.each do |peer|
       peer.check_targets
     end
     sleep(1)
   end
 end
+
