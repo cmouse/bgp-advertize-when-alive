@@ -145,6 +145,12 @@ peers = []
 
 Daemons.run_proc(File.basename('bgp-peer'), { :dir_mode => :system }) do
   config = YAML.load_file(configFile)
+
+  if Daemons.controller.options[:ontop]
+    Log.create
+  else
+    Log.create(logFile)
+  end
   Log.create(logFile)
   Log.level=logLevel
 
@@ -158,8 +164,7 @@ Daemons.run_proc(File.basename('bgp-peer'), { :dir_mode => :system }) do
     peer.neighbor.start :auto_retry => true, :no_blocking => true
     peers << peer
   end
- 
-  # this is needed to co-operate with bgp4r properly.
+
   begin
     t = Thread.new do
       loop do
