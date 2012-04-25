@@ -28,7 +28,7 @@ require 'daemons'
 include BGP
 
 # Set this where your config file is
-configFile = "/opt/bgp/cmouse-bgp-advertize-when-alive-59ffe48/ruby/bgp-daemon.conf"
+configFile = "/etc/bgp-daemon.conf"
 logFile = "/var/log/bgp-daemon.log"
 
 # WARN is good. Use DEBUG when you got problems
@@ -37,7 +37,7 @@ logLevel = Logger::WARN
 # end of config
 
 class Peer
-  attr_accessor :local_ip, :remote_ip, :as, :networks, :neighbor, :targets, :afi
+  attr_accessor :local_ip, :remote_ip, :as, :networks, :neighbor, :targets, :afi, :last_check, :ok
 
   def initialize(opts)
     opts.each do |k,v| self.instance_variable_set("@#{k}", v) end
@@ -52,9 +52,12 @@ class Peer
 
     self.neighbor.capability_mbgp_ipv6_unicast if @afi.to_sym == :ipv6
     self.neighbor.capability_mbgp_ipv4_unicast if @afi.to_sym == :ipv4
+    @last_check = 0
+    @ok = false
   end
 
   def update(msg)
+    Log.warn "We received a #{msg.class}"
     if msg.is_a?(Notification)
       self.cleanup
     end
@@ -65,11 +68,19 @@ class Peer
   end
 
   def cleanup
+    Log.warn "Cleaning up targets for #{@name}"
     @targets.each do |target| target[:state] = 0 end
+    @ok = false
   end
 
   def check_targets
+    Log.debug "Running check_targets"
+
+    @last_check = Time.now
     return unless self.connected?
+
+    @ok = true
+
     @targets.each do |target|
       # check & advertize
       target[:state] = 0 unless target.has_key?(:state)
@@ -90,6 +101,7 @@ class Peer
                 Multi_exit_disc.new(target[:med].to_i),
                 Local_pref.new(target[:pref].to_i),
                 As_path.new(@as),
+                # this is always ignored...
                 Next_hop.new(target[:destination]),
                 Communities.new(target[:communities]),
                 Mp_reach.new(:safi => 1, :nlris => nlris, :nexthop => target[:destination])
@@ -146,12 +158,23 @@ Daemons.run_proc(File.basename('bgp-peer'), { :dir_mode => :system }) do
     peer.neighbor.start :auto_retry => true, :no_blocking => true
     peers << peer
   end
-
-  loop do
-    peers.each do |peer|
-      peer.check_targets
+ 
+  # this is needed to co-operate with bgp4r properly.
+  begin
+    t = Thread.new do
+      loop do
+        peers.each do |peer|
+          if peer.ok
+             peer.cleanup unless peer.connected?
+          end
+          peer.check_targets if (Time.now.to_i - peer.last_check.to_i > 5)
+        end
+        Kernel.select nil, nil, nil, 0.2
+      end
     end
-    sleep(1)
-  end
+    t.join
+   rescue Exception
+     Log.warn "Shutdown completed"
+     # ignore
+   end
 end
-
