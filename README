@@ -14,7 +14,7 @@ Prerequisites:
  - rubygems
  - bundler
 
-Execute 'bundler install' on the directory. It should install the
+Execute 'bundle install' on the directory. It should install the
 required components.
 
 Edit the script bgp-peer.rb, and change the paths. 
